@@ -13,7 +13,7 @@ wire [31:0] inst;
 
 assign io_pc = pc;
 
-assign next_pc = pc + 4;
+// assign next_pc = pc + 4;
 
 always @(posedge clock) begin
     if(reset)
@@ -69,12 +69,12 @@ RegFile u_regfile(
     .rdata2(rs2_data)
 );
 //================================
-assign reg_wen = 1'b0;
-assign wb_data = 32'b0;
+// assign reg_wen = 1'b0;
+// assign wb_data = 32'b0;
 //================================
 
 // =====================
-// Step9 : ImmGen 立即数生成器
+// ImmGen 立即数生成器
 
 wire [31:0] imm_i;
 wire [31:0] imm_s;
@@ -117,10 +117,8 @@ assign imm_j = {
 };
 //============================
 
-// =====================
 // Step10 : Decode
-// =====================
-
+// ===========================
 wire is_addi;
 wire is_auipc;
 wire is_jal;
@@ -128,11 +126,11 @@ wire is_jalr;
 wire is_lw;
 wire is_sw;
 wire is_ebreak;
-
+//译码 addi
 assign is_addi =
     (opcode == 7'b0010011) &&
     (funct3 == 3'b000);
-
+//译码 auipc
 assign is_auipc =
     (opcode == 7'b0010111);
 
@@ -154,6 +152,114 @@ assign is_sw =
 assign is_ebreak =
     (inst == 32'h00100073);
 //====================================
+//定义 ALU 控制信号
+wire [3:0] alu_op;
+
+localparam ALU_ADD  = 4'd0;
+localparam ALU_SUB  = 4'd1;
+localparam ALU_AND  = 4'd2;
+localparam ALU_OR   = 4'd3;
+localparam ALU_XOR  = 4'd4;
+localparam ALU_SLL  = 4'd5;
+localparam ALU_SRL  = 4'd6;
+localparam ALU_SRA  = 4'd7;
+localparam ALU_SLT  = 4'd8;
+localparam ALU_SLTU = 4'd9;
+//声明  选择 ALU 输入
+wire [31:0] alu_src1;
+wire [31:0] alu_src2;
+
+wire [31:0] alu_result;
+//alu赋值
+assign alu_src1 =
+    is_auipc ? pc :
+               rs1_data;
+
+assign alu_src2 =
+    (is_addi || is_lw || is_sw || is_jalr)
+        ? imm_i
+        : rs2_data;
+//实现alu_op
+assign alu_op =
+    (is_addi || is_auipc || is_lw || is_sw || is_jalr)
+        ? ALU_ADD
+        : ALU_ADD;
+//实例化ALU
+ALU u_alu(
+    .src1(alu_src1),
+    .src2(alu_src2),
+    .alu_op(alu_op),
+    .result(alu_result)
+);
+//=====================================
+wire [31:0] jal_target;
+wire [31:0] jalr_target;
+wire [31:0] branch_target;
+
+assign jal_target  = pc + imm_j;
+
+assign jalr_target =
+    (rs1_data + imm_i)
+    & ~32'b1;
+
+assign branch_target =
+    pc + imm_b;
+
+assign next_pc =
+    is_jal  ? jal_target  :
+    is_jalr ? jalr_target :
+              (pc + 32'd4);
+//==========================================
+
+// MEM Stage
+// =====================
+wire mem_read;
+wire mem_write;
+
+wire [31:0] mem_rdata;
+
+wire [7:0] wmask;
+//产生控制信号
+assign mem_read  = is_lw;
+assign mem_write = is_sw;
+//============================
+assign wmask =
+    mem_write ? 8'h0f : 8'h00;
+//实例化数据存储器
+MemDPIC dmem(
+    .clk(clock),
+
+    .en(mem_read || mem_write),
+
+    .addr(alu_result),
+
+    .wmask(wmask),
+
+    .wdata(rs2_data),
+
+    .rdata(mem_rdata)
+);
+//=================================
+
+// WB Stage
+
+assign reg_wen =
+       is_addi
+    || is_auipc
+    || is_lw
+    || is_jal
+    || is_jalr;
+
+assign wb_data =
+    is_lw
+        ? mem_rdata
+        :
+    (is_jal || is_jalr)
+        ? (pc + 32'd4)
+        :
+          alu_result;
+
+
 
 ITraceDPIC itrace(
     .clk(clock),
@@ -161,7 +267,16 @@ ITraceDPIC itrace(
     .inst(inst),
     .next_pc(next_pc)
 );
+//MMIO判断
+assign io_is_mmio =
+    mem_write &&
+    (
+        (alu_result < 32'h80000000)
+        ||
+        (alu_result >= 32'h88000000)
+    );
 
-assign io_is_mmio = 1'b0;
+
+
 
 endmodule
