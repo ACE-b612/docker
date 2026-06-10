@@ -52,7 +52,9 @@ wire [31:0] rs2_data;
 
 wire reg_wen;
 wire [31:0] wb_data;
+// =====================
 
+//实例化寄存器堆
 RegFile u_regfile(
     .clk(clock),
 
@@ -66,7 +68,92 @@ RegFile u_regfile(
     .rdata1(rs1_data),
     .rdata2(rs2_data)
 );
+//================================
+assign reg_wen = 1'b0;
+assign wb_data = 32'b0;
+//================================
 
+// =====================
+// Step9 : ImmGen 立即数生成器
+
+wire [31:0] imm_i;
+wire [31:0] imm_s;
+wire [31:0] imm_b;
+wire [31:0] imm_u;
+wire [31:0] imm_j;
+
+assign imm_i = {
+    {20{inst[31]}},
+    inst[31:20]
+};
+
+assign imm_s = {
+    {20{inst[31]}},
+    inst[31:25],
+    inst[11:7]
+};
+
+assign imm_b = {
+    {19{inst[31]}},
+    inst[31],
+    inst[7],
+    inst[30:25],
+    inst[11:8],
+    1'b0
+};
+
+assign imm_u = {
+    inst[31:12],
+    12'b0
+};
+
+assign imm_j = {
+    {11{inst[31]}},
+    inst[31],
+    inst[19:12],
+    inst[20],
+    inst[30:21],
+    1'b0
+};
+//============================
+
+// =====================
+// Step10 : Decode
+// =====================
+
+wire is_addi;
+wire is_auipc;
+wire is_jal;
+wire is_jalr;
+wire is_lw;
+wire is_sw;
+wire is_ebreak;
+
+assign is_addi =
+    (opcode == 7'b0010011) &&
+    (funct3 == 3'b000);
+
+assign is_auipc =
+    (opcode == 7'b0010111);
+
+assign is_jal =
+    (opcode == 7'b1101111);
+
+assign is_jalr =
+    (opcode == 7'b1100111) &&
+    (funct3 == 3'b000);
+
+assign is_lw =
+    (opcode == 7'b0000011) &&
+    (funct3 == 3'b010);
+
+assign is_sw =
+    (opcode == 7'b0100011) &&
+    (funct3 == 3'b010);
+
+assign is_ebreak =
+    (inst == 32'h00100073);
+//====================================
 
 ITraceDPIC itrace(
     .clk(clock),
