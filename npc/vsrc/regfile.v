@@ -9,7 +9,9 @@ module RegFile(
     input [4:0] raddr2,
 
     output [31:0] rdata1,
-    output [31:0] rdata2
+    output [31:0] rdata2,
+
+    output [31:0] a0_val
 );
 
 reg [31:0] regs [0:31];
@@ -19,6 +21,8 @@ assign rdata1 =
 
 assign rdata2 =
     (raddr2 == 0) ? 32'b0 : regs[raddr2];
+
+assign a0_val = regs[10];
 
 always @(posedge clk) begin
     if (wen && (waddr != 0))

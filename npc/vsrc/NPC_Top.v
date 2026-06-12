@@ -46,13 +46,12 @@ assign rs1    = inst[19:15];
 assign rs2    = inst[24:20];
 assign funct7 = inst[31:25];
 
-//step8 实例化寄存器堆
 wire [31:0] rs1_data;
 wire [31:0] rs2_data;
-
+wire [31:0] a0_val;
 wire reg_wen;
 wire [31:0] wb_data;
-// =====================
+
 
 //实例化寄存器堆
 RegFile u_regfile(
@@ -66,7 +65,9 @@ RegFile u_regfile(
     .raddr2(rs2),
 
     .rdata1(rs1_data),
-    .rdata2(rs2_data)
+    .rdata2(rs2_data),
+
+    .a0_val(a0_val)
 );
 //================================
 // assign reg_wen = 1'b0;
@@ -254,13 +255,35 @@ assign wb_data =
     is_lw
         ? mem_rdata
         :
+    is_auipc
+        ? auipc_result
+        :
     (is_jal || is_jalr)
         ? (pc + 32'd4)
         :
           alu_result;
 
+// Regfile DPI
+// =====================
+RegfileDPIC reg_dpi(
+    .clk(clock),
+    .wen(reg_wen),
+    .waddr(rd),
+    .wdata(wb_data)
+);
+//======================
 
+wire [31:0] auipc_result;
 
+assign auipc_result = pc + imm_u;
+
+//实例化EbreakDPIC
+EbreakDPIC ebreak_dpi(
+    .clk(clock),
+    .ebreak_en(is_ebreak),
+    .a0_val(a0_val)
+);
+//==========================
 ITraceDPIC itrace(
     .clk(clock),
     .pc(pc),
@@ -275,8 +298,6 @@ assign io_is_mmio =
         ||
         (alu_result >= 32'h88000000)
     );
-
-
 
 
 endmodule
