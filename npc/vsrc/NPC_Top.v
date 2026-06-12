@@ -127,6 +127,17 @@ wire is_jalr;
 wire is_lw;
 wire is_sw;
 wire is_ebreak;
+//补全功能部分 
+wire is_add;
+wire is_sub;
+wire is_and;
+wire is_or;
+wire is_xor;
+wire is_sll;
+wire is_srl;
+wire is_sra;
+wire is_slt;
+wire is_sltu;
 //译码 addi
 assign is_addi =
     (opcode == 7'b0010011) &&
@@ -152,6 +163,58 @@ assign is_sw =
 
 assign is_ebreak =
     (inst == 32'h00100073);
+//==========================================
+//补全部分译码
+// R-Type
+assign is_add =
+    (opcode == 7'b0110011) &&
+    (funct3 == 3'b000) &&
+    (funct7 == 7'b0000000);
+
+assign is_sub =
+    (opcode == 7'b0110011) &&
+    (funct3 == 3'b000) &&
+    (funct7 == 7'b0100000);
+
+assign is_and =
+    (opcode == 7'b0110011) &&
+    (funct3 == 3'b111) &&
+    (funct7 == 7'b0000000);
+
+assign is_or =
+    (opcode == 7'b0110011) &&
+    (funct3 == 3'b110) &&
+    (funct7 == 7'b0000000);
+
+assign is_xor =
+    (opcode == 7'b0110011) &&
+    (funct3 == 3'b100) &&
+    (funct7 == 7'b0000000);
+
+assign is_sll =
+    (opcode == 7'b0110011) &&
+    (funct3 == 3'b001) &&
+    (funct7 == 7'b0000000);
+
+assign is_srl =
+    (opcode == 7'b0110011) &&
+    (funct3 == 3'b101) &&
+    (funct7 == 7'b0000000);
+
+assign is_sra =
+    (opcode == 7'b0110011) &&
+    (funct3 == 3'b101) &&
+    (funct7 == 7'b0100000);
+
+assign is_slt =
+    (opcode == 7'b0110011) &&
+    (funct3 == 3'b010) &&
+    (funct7 == 7'b0000000);
+
+assign is_sltu =
+    (opcode == 7'b0110011) &&
+    (funct3 == 3'b011) &&
+    (funct7 == 7'b0000000);
 //====================================
 //定义 ALU 控制信号
 wire [3:0] alu_op;
@@ -174,17 +237,39 @@ wire [31:0] alu_result;
 //alu赋值
 assign alu_src1 =
     is_auipc ? pc :
-               rs1_data;
+    rs1_data;
 
 assign alu_src2 =
-    (is_addi || is_lw || is_sw || is_jalr)
-        ? imm_i
-        : rs2_data;
+    (is_addi || is_lw || is_jalr)
+        ? imm_i :
+    is_sw
+        ? imm_s :
+        rs2_data;
 //实现alu_op
 assign alu_op =
-    (is_addi || is_auipc || is_lw || is_sw || is_jalr)
-        ? ALU_ADD
-        : ALU_ADD;
+    (is_add || is_addi || is_auipc ||
+     is_lw  || is_sw  || is_jalr)
+        ? ALU_ADD :
+
+    is_sub  ? ALU_SUB :
+
+    is_and  ? ALU_AND :
+
+    is_or   ? ALU_OR :
+
+    is_xor  ? ALU_XOR :
+
+    is_sll  ? ALU_SLL :
+
+    is_srl  ? ALU_SRL :
+
+    is_sra  ? ALU_SRA :
+
+    is_slt  ? ALU_SLT :
+
+    is_sltu ? ALU_SLTU :
+
+    ALU_ADD;
 //实例化ALU
 ALU u_alu(
     .src1(alu_src1),
@@ -245,11 +330,21 @@ MemDPIC dmem(
 // WB Stage
 
 assign reg_wen =
-       is_addi
-    || is_auipc
-    || is_lw
-    || is_jal
-    || is_jalr;
+    is_add  ||
+    is_sub  ||
+    is_and  ||
+    is_or   ||
+    is_xor  ||
+    is_sll  ||
+    is_srl  ||
+    is_sra  ||
+    is_slt  ||
+    is_sltu ||
+    is_addi ||
+    is_auipc||
+    is_jal  ||
+    is_jalr ||
+    is_lw;
 
 assign wb_data =
     is_lw
