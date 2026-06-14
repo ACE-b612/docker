@@ -8,10 +8,46 @@ module NPC_Top(
 
 reg [31:0] pc;
 
+//branch条件
+//=========================
+wire beq_taken;
+wire bne_taken;
+wire blt_taken;
+wire bge_taken;
+wire bltu_taken;
+wire bgeu_taken;
 wire [31:0] next_pc;
 wire [31:0] inst;
-
+//=========================
 assign io_pc = pc;
+
+//branch 条件
+assign beq_taken =
+    is_beq &&
+    (rs1_data == rs2_data);
+assign bne_taken =
+    is_bne &&
+    (rs1_data != rs2_data);
+assign blt_taken =
+    is_blt &&
+    ($signed(rs1_data) < $signed(rs2_data));
+assign bge_taken =
+    is_bge &&
+    ($signed(rs1_data) >= $signed(rs2_data));
+assign bltu_taken =
+    is_bltu &&
+    (rs1_data < rs2_data);
+assign bgeu_taken =
+    is_bgeu &&
+    (rs1_data >= rs2_data);
+//branch_taken
+assign branch_taken =
+    beq_taken  ||
+    bne_taken  ||
+    blt_taken  ||
+    bge_taken  ||
+    bltu_taken ||
+    bgeu_taken;
 
 // assign next_pc = pc + 4;
 
@@ -127,7 +163,7 @@ wire is_jalr;
 wire is_lw;
 wire is_sw;
 wire is_ebreak;
-//补全功能部分 
+//补全R_type功能部分 
 wire is_add;
 wire is_sub;
 wire is_and;
@@ -138,7 +174,41 @@ wire is_srl;
 wire is_sra;
 wire is_slt;
 wire is_sltu;
-//译码 addi
+//补全I_type
+wire is_andi;
+wire is_ori;
+wire is_xori;
+
+wire is_slti;
+wire is_sltiu;
+
+wire is_slli;
+wire is_srli;
+wire is_srai;
+
+//lui
+wire is_lui;
+
+//实现branch
+wire is_beq;
+wire is_bne;
+wire is_blt;
+wire is_bge;
+wire is_bltu;
+wire is_bgeu;
+
+wire branch_taken;
+
+//扩展访存指令
+wire is_lb;
+wire is_lh;
+wire is_lbu;
+wire is_lhu;
+
+wire is_sb;
+wire is_sh;
+
+//译码 ======================================
 assign is_addi =
     (opcode == 7'b0010011) &&
     (funct3 == 3'b000);
@@ -215,10 +285,106 @@ assign is_sltu =
     (opcode == 7'b0110011) &&
     (funct3 == 3'b011) &&
     (funct7 == 7'b0000000);
+
+//I_type部分
+assign is_andi =
+    (opcode == 7'b0010011) &&
+    (funct3 == 3'b111);
+
+assign is_ori =
+    (opcode == 7'b0010011) &&
+    (funct3 == 3'b110);
+
+assign is_xori =
+    (opcode == 7'b0010011) &&
+    (funct3 == 3'b100);
+
+assign is_slti =
+    (opcode == 7'b0010011) &&
+    (funct3 == 3'b010);
+
+assign is_sltiu =
+    (opcode == 7'b0010011) &&
+    (funct3 == 3'b011);
+
+assign is_slli =
+    (opcode == 7'b0010011) &&
+    (funct3 == 3'b001) &&
+    (funct7 == 7'b0000000);
+
+assign is_srli =
+    (opcode == 7'b0010011) &&
+    (funct3 == 3'b101) &&
+    (funct7 == 7'b0000000);
+
+assign is_srai =
+    (opcode == 7'b0010011) &&
+    (funct3 == 3'b101) &&
+    (funct7 == 7'b0100000);
+
+assign is_lui =
+    (opcode == 7'b0110111);
+
+//branch部分
+assign is_beq =
+    opcode == 7'b1100011 &&
+    funct3 == 3'b000;
+
+assign is_bne =
+    opcode == 7'b1100011 &&
+    funct3 == 3'b001;
+
+assign is_blt =
+    opcode == 7'b1100011 &&
+    funct3 == 3'b100;
+
+assign is_bge =
+    opcode == 7'b1100011 &&
+    funct3 == 3'b101;
+
+assign is_bltu =
+    opcode == 7'b1100011 &&
+    funct3 == 3'b110;
+
+assign is_bgeu =
+    opcode == 7'b1100011 &&
+    funct3 == 3'b111;
+
+//扩展访存指令部分
+assign is_lb =
+    opcode == 7'b0000011 &&
+    funct3 == 3'b000;
+
+assign is_lh =
+    opcode == 7'b0000011 &&
+    funct3 == 3'b001;
+
+assign is_lw =
+    opcode == 7'b0000011 &&
+    funct3 == 3'b010;
+
+assign is_lbu =
+    opcode == 7'b0000011 &&
+    funct3 == 3'b100;
+
+assign is_lhu =
+    opcode == 7'b0000011 &&
+    funct3 == 3'b101;
+
+assign is_sb =
+    opcode == 7'b0100011 &&
+    funct3 == 3'b000;
+
+assign is_sh =
+    opcode == 7'b0100011 &&
+    funct3 == 3'b001;
+
+assign is_sw =
+    opcode == 7'b0100011 &&
+    funct3 == 3'b010;
 //====================================
 //定义 ALU 控制信号
 wire [3:0] alu_op;
-
 localparam ALU_ADD  = 4'd0;
 localparam ALU_SUB  = 4'd1;
 localparam ALU_AND  = 4'd2;
@@ -240,34 +406,48 @@ assign alu_src1 =
     rs1_data;
 
 assign alu_src2 =
-    (is_addi || is_lw || is_jalr)
-        ? imm_i :
-    is_sw
-        ? imm_s :
-        rs2_data;
-//实现alu_op
+
+    (is_addi  ||
+     is_andi  ||
+     is_ori   ||
+     is_xori  ||
+     is_slti  ||
+     is_sltiu ||
+     is_slli  ||
+     is_srli  ||
+     is_srai)
+
+    ? imm_i
+
+    : rs2_data;
+//实现alu_op-已补全
 assign alu_op =
-    (is_add || is_addi || is_auipc ||
-     is_lw  || is_sw  || is_jalr)
-        ? ALU_ADD :
+    is_add   ? ALU_ADD  :
+    is_sub   ? ALU_SUB  :
 
-    is_sub  ? ALU_SUB :
+    is_and   ? ALU_AND  :
+    is_andi  ? ALU_AND  :
 
-    is_and  ? ALU_AND :
+    is_or    ? ALU_OR   :
+    is_ori   ? ALU_OR   :
 
-    is_or   ? ALU_OR :
+    is_xor   ? ALU_XOR  :
+    is_xori  ? ALU_XOR  :
 
-    is_xor  ? ALU_XOR :
+    is_sll   ? ALU_SLL  :
+    is_slli  ? ALU_SLL  :
 
-    is_sll  ? ALU_SLL :
+    is_srl   ? ALU_SRL  :
+    is_srli  ? ALU_SRL  :
 
-    is_srl  ? ALU_SRL :
+    is_sra   ? ALU_SRA  :
+    is_srai  ? ALU_SRA  :
 
-    is_sra  ? ALU_SRA :
+    is_slt   ? ALU_SLT  :
+    is_slti  ? ALU_SLT  :
 
-    is_slt  ? ALU_SLT :
-
-    is_sltu ? ALU_SLTU :
+    is_sltu  ? ALU_SLTU :
+    is_sltiu ? ALU_SLTU :
 
     ALU_ADD;
 //实例化ALU
@@ -292,9 +472,17 @@ assign branch_target =
     pc + imm_b;
 
 assign next_pc =
-    is_jal  ? jal_target  :
-    is_jalr ? jalr_target :
-              (pc + 32'd4);
+
+    branch_taken
+        ? branch_target
+
+    : is_jal
+        ? jal_target
+
+    : is_jalr
+        ? jalr_target
+
+    : (pc + 32'd4);
 //==========================================
 
 // MEM Stage
@@ -341,22 +529,37 @@ assign reg_wen =
     is_slt  ||
     is_sltu ||
     is_addi ||
+
+    is_andi  ||
+    is_ori   ||
+    is_xori  ||
+
+    is_slti  ||
+    is_sltiu ||
+
+    is_slli  ||
+    is_srli  ||
+    is_srai  ||
+    
+    is_lui ||
+    
     is_auipc||
     is_jal  ||
     is_jalr ||
     is_lw;
 
 assign wb_data =
+
     is_lw
         ? mem_rdata
-        :
-    is_auipc
-        ? auipc_result
-        :
-    (is_jal || is_jalr)
+
+    : is_lui
+        ? imm_u
+
+    : (is_jal || is_jalr)
         ? (pc + 32'd4)
-        :
-          alu_result;
+
+    : alu_result;
 
 // Regfile DPI
 // =====================
