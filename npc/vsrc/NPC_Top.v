@@ -57,6 +57,21 @@ always @(posedge clock) begin
     else
         pc <= next_pc;
 end
+//实现wmask
+assign wmask =
+
+    is_sb
+        ? (8'b00000001 << alu_result[1:0])
+
+    : is_sh
+        ? (alu_result[1]
+            ? 8'b00001100
+            : 8'b00000011)
+
+    : is_sw
+        ? 8'b00001111
+
+    : 8'b00000000;
 
 MemDPIC imem(
     .clk(clock),
@@ -493,12 +508,29 @@ wire mem_write;
 wire [31:0] mem_rdata;
 
 wire [7:0] wmask;
-//产生控制信号
-assign mem_read  = is_lw;
-assign mem_write = is_sw;
+//新增
+wire [7:0] byte_data;
+wire [15:0] half_data;
+wire [31:0] load_data;
+
+//产生控制信号--改动 实现完整功能
+assign mem_read =
+
+    is_lb  ||
+    is_lh  ||
+    is_lw  ||
+    is_lbu ||
+    is_lhu;
+
+assign mem_write =
+    is_sb ||
+    is_sh ||
+    is_sw;
 //============================
 assign wmask =
     mem_write ? 8'h0f : 8'h00;
+
+
 //实例化数据存储器
 MemDPIC dmem(
     .clk(clock),
@@ -515,6 +547,43 @@ MemDPIC dmem(
 );
 //=================================
 
+// ======================
+// Load数据提取
+// ======================
+
+// 取对应字节
+
+assign byte_data =
+    (alu_result[1:0] == 2'b00) ? mem_rdata[7:0]   :
+    (alu_result[1:0] == 2'b01) ? mem_rdata[15:8]  :
+    (alu_result[1:0] == 2'b10) ? mem_rdata[23:16] :
+                                 mem_rdata[31:24];
+
+// 取对应半字
+
+assign half_data =
+    alu_result[1]
+        ? mem_rdata[31:16]
+        : mem_rdata[15:0];
+
+// Load扩展
+
+assign load_data =
+
+    is_lb
+        ? {{24{byte_data[7]}}, byte_data}
+
+    : is_lbu
+        ? {24'b0, byte_data}
+
+    : is_lh
+        ? {{16{half_data[15]}}, half_data}
+
+    : is_lhu
+        ? {16'b0, half_data}
+
+    : mem_rdata;
+//================================================
 // WB Stage
 
 assign reg_wen =
@@ -542,7 +611,13 @@ assign reg_wen =
     is_srai  ||
     
     is_lui ||
-    
+//LOAD部分
+    is_lb  ||
+    is_lh  ||
+    is_lw  ||
+    is_lbu ||
+    is_lhu ||
+
     is_auipc||
     is_jal  ||
     is_jalr ||
@@ -550,14 +625,14 @@ assign reg_wen =
 
 assign wb_data =
 
-    is_lw
-        ? mem_rdata
+    mem_read
+        ? load_data
 
     : is_lui
         ? imm_u
 
     : (is_jal || is_jalr)
-        ? (pc + 32'd4)
+        ? (pc + 4)
 
     : alu_result;
 
