@@ -134,6 +134,7 @@ wire [31:0] imm_b;
 wire [31:0] imm_u;
 wire [31:0] imm_j;
 
+
 assign imm_i = {
     {20{inst[31]}},
     inst[31:20]
@@ -421,6 +422,7 @@ assign alu_src1 =
     rs1_data;
 
 assign alu_src2 =
+    is_auipc ? imm_u :
 
     (is_addi  ||
      is_andi  ||
@@ -430,39 +432,59 @@ assign alu_src2 =
      is_sltiu ||
      is_slli  ||
      is_srli  ||
-     is_srai)
+     is_srai  ||
+     is_lw    ||
+     is_lb    ||
+     is_lh    ||
+     is_lbu   ||
+     is_lhu   ||
+     is_sw    ||
+     is_sb    ||
+     is_sh)
 
     ? imm_i
 
     : rs2_data;
 //实现alu_op-已补全
 assign alu_op =
-    is_add   ? ALU_ADD  :
+    (is_add   ||
+     is_addi  ||
+     is_auipc ||
+     is_lw    ||
+     is_lb    ||
+     is_lh    ||
+     is_lbu   ||
+     is_lhu   ||
+     is_sw    ||
+     is_sb    ||
+     is_sh)
+        ? ALU_ADD :
+
     is_sub   ? ALU_SUB  :
 
-    is_and   ? ALU_AND  :
-    is_andi  ? ALU_AND  :
+    is_and   || is_andi
+        ? ALU_AND :
 
-    is_or    ? ALU_OR   :
-    is_ori   ? ALU_OR   :
+    is_or    || is_ori
+        ? ALU_OR :
 
-    is_xor   ? ALU_XOR  :
-    is_xori  ? ALU_XOR  :
+    is_xor   || is_xori
+        ? ALU_XOR :
 
-    is_sll   ? ALU_SLL  :
-    is_slli  ? ALU_SLL  :
+    is_sll   || is_slli
+        ? ALU_SLL :
 
-    is_srl   ? ALU_SRL  :
-    is_srli  ? ALU_SRL  :
+    is_srl   || is_srli
+        ? ALU_SRL :
 
-    is_sra   ? ALU_SRA  :
-    is_srai  ? ALU_SRA  :
+    is_sra   || is_srai
+        ? ALU_SRA :
 
-    is_slt   ? ALU_SLT  :
-    is_slti  ? ALU_SLT  :
+    is_slt   || is_slti
+        ? ALU_SLT :
 
-    is_sltu  ? ALU_SLTU :
-    is_sltiu ? ALU_SLTU :
+    is_sltu  || is_sltiu
+        ? ALU_SLTU :
 
     ALU_ADD;
 //实例化ALU
@@ -476,7 +498,11 @@ ALU u_alu(
 wire [31:0] jal_target;
 wire [31:0] jalr_target;
 wire [31:0] branch_target;
+//====================
+wire [31:0] auipc_result;
 
+assign auipc_result = pc + imm_u;
+//====================
 assign jal_target  = pc + imm_j;
 
 assign jalr_target =
@@ -631,8 +657,11 @@ assign wb_data =
     : is_lui
         ? imm_u
 
+    : is_auipc
+        ? auipc_result
+
     : (is_jal || is_jalr)
-        ? (pc + 4)
+        ? (pc + 32'd4)
 
     : alu_result;
 
@@ -646,9 +675,7 @@ RegfileDPIC reg_dpi(
 );
 //======================
 
-wire [31:0] auipc_result;
 
-assign auipc_result = pc + imm_u;
 
 //实例化EbreakDPIC
 EbreakDPIC ebreak_dpi(
