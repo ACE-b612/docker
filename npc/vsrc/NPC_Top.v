@@ -59,19 +59,14 @@ always @(posedge clock) begin
 end
 //实现wmask
 assign wmask =
+    is_sb ? (8'b00000001 << alu_result[1:0]) :
 
-    is_sb
-        ? (8'b00000001 << alu_result[1:0])
+    is_sh ? (alu_result[1] ?
+                8'b00001100 :
+                8'b00000011) :
 
-    : is_sh
-        ? (alu_result[1]
-            ? 8'b00001100
-            : 8'b00000011)
-
-    : is_sw
-        ? 8'b00001111
-
-    : 8'b00000000;
+    is_sw ? 8'b00001111 :
+            8'b00000000;
 
 MemDPIC imem(
     .clk(clock),
@@ -239,13 +234,13 @@ assign is_jalr =
     (opcode == 7'b1100111) &&
     (funct3 == 3'b000);
 
-assign is_lw =
-    (opcode == 7'b0000011) &&
-    (funct3 == 3'b010);
+// assign is_lw =
+//     (opcode == 7'b0000011) &&
+//     (funct3 == 3'b010);
 
-assign is_sw =
-    (opcode == 7'b0100011) &&
-    (funct3 == 3'b010);
+// assign is_sw =
+//     (opcode == 7'b0100011) &&
+//     (funct3 == 3'b010);
 
 assign is_ebreak =
     (inst == 32'h00100073);
@@ -325,8 +320,7 @@ assign is_sltiu =
 
 assign is_slli =
     (opcode == 7'b0010011) &&
-    (funct3 == 3'b001) &&
-    (funct7 == 7'b0000000);
+    (funct3 == 3'b001) ;
 
 assign is_srli =
     (opcode == 7'b0010011) &&
@@ -437,56 +431,30 @@ assign alu_src2 =
      is_lb    ||
      is_lh    ||
      is_lbu   ||
-     is_lhu   ||
-     is_sw    ||
-     is_sb    ||
+     is_lhu)
+
+    ? imm_i :
+
+    (is_sw ||
+     is_sb ||
      is_sh)
 
-    ? imm_i
+    ? imm_s :
 
-    : rs2_data;
+    rs2_data;
 //实现alu_op-已补全
 assign alu_op =
-    (is_add   ||
-     is_addi  ||
-     is_auipc ||
-     is_lw    ||
-     is_lb    ||
-     is_lh    ||
-     is_lbu   ||
-     is_lhu   ||
-     is_sw    ||
-     is_sb    ||
-     is_sh)
-        ? ALU_ADD :
-
-    is_sub   ? ALU_SUB  :
-
-    is_and   || is_andi
-        ? ALU_AND :
-
-    is_or    || is_ori
-        ? ALU_OR :
-
-    is_xor   || is_xori
-        ? ALU_XOR :
-
-    is_sll   || is_slli
-        ? ALU_SLL :
-
-    is_srl   || is_srli
-        ? ALU_SRL :
-
-    is_sra   || is_srai
-        ? ALU_SRA :
-
-    is_slt   || is_slti
-        ? ALU_SLT :
-
-    is_sltu  || is_sltiu
-        ? ALU_SLTU :
-
-    ALU_ADD;
+    is_add  ? ALU_ADD  :
+    is_sub  ? ALU_SUB  :
+    is_and  ? ALU_AND  :
+    is_or   ? ALU_OR   :
+    is_xor  ? ALU_XOR  :
+    is_sll  ? ALU_SLL  :
+    is_srl  ? ALU_SRL  :
+    is_sra  ? ALU_SRA  :
+    is_slt  ? ALU_SLT  :
+    is_sltu ? ALU_SLTU :
+              ALU_ADD;
 //实例化ALU
 ALU u_alu(
     .src1(alu_src1),
@@ -513,17 +481,10 @@ assign branch_target =
     pc + imm_b;
 
 assign next_pc =
-
-    branch_taken
-        ? branch_target
-
-    : is_jal
-        ? jal_target
-
-    : is_jalr
-        ? jalr_target
-
-    : (pc + 32'd4);
+    branch_taken ? branch_target :
+    is_jal       ? jal_target :
+    is_jalr      ? jalr_target :
+                   pc + 4;
 //==========================================
 
 // MEM Stage
@@ -534,10 +495,27 @@ wire mem_write;
 wire [31:0] mem_rdata;
 
 wire [7:0] wmask;
+wire [31:0] wdata_shifted;
 //新增
 wire [7:0] byte_data;
 wire [15:0] half_data;
 wire [31:0] load_data;
+
+// 写掩码生成（根据 sb/sh/sw 和地址低位）
+assign wmask = mem_write ? (
+                    is_sb ? (8'b00000001 << alu_result[1:0]) :
+                    is_sh ? (alu_result[1] ? 8'b00001100 : 8'b00000011) :
+                    is_sw ? 8'b00001111 : 8'b0
+               ) : 8'b0;
+
+// 写数据对齐（sb/sh 需要移位到正确的字节/半字位置）
+assign wdata_shifted = 
+    is_sb ? ({24'b0, rs2_data[7:0]}
+            << (alu_result[1:0] * 8)) :
+
+    is_sh ? ({16'b0, rs2_data[15:0]}
+            << (alu_result[1] ? 16 : 0)) :
+    rs2_data;
 
 //产生控制信号--改动 实现完整功能
 assign mem_read =
@@ -553,26 +531,39 @@ assign mem_write =
     is_sh ||
     is_sw;
 //============================
-assign wmask =
-    mem_write ? 8'h0f : 8'h00;
+// assign wmask =
+//     mem_write ? 8'h0f : 8'h00;
+
 
 
 //实例化数据存储器
 MemDPIC dmem(
     .clk(clock),
-
     .en(mem_read || mem_write),
-
     .addr(alu_result),
-
     .wmask(wmask),
-
-    .wdata(rs2_data),
-
+    .wdata(wdata_shifted), // 改为对齐后的数据
     .rdata(mem_rdata)
 );
 //=================================
 
+
+always @(posedge clock) begin
+    if(mem_read || mem_write) begin
+        $display(
+            "MEM: addr=%h wmask=%h wdata=%h rdata=%h",
+            alu_result,
+            wmask,
+            rs2_data,
+            mem_rdata
+        );
+    end
+end
+
+//添加 EBREAK
+always @(posedge clock) begin
+    if (is_ebreak) $display("[EBREAK] a0_val = %d", a0_val);
+end
 // ======================
 // Load数据提取
 // ======================
@@ -646,8 +637,7 @@ assign reg_wen =
 
     is_auipc||
     is_jal  ||
-    is_jalr ||
-    is_lw;
+    is_jalr ;
 
 assign wb_data =
 
