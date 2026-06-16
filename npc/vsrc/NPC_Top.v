@@ -444,17 +444,39 @@ assign alu_src2 =
     rs2_data;
 //实现alu_op-已补全
 assign alu_op =
-    is_add  ? ALU_ADD  :
-    is_sub  ? ALU_SUB  :
-    is_and  ? ALU_AND  :
-    is_or   ? ALU_OR   :
-    is_xor  ? ALU_XOR  :
-    is_sll  ? ALU_SLL  :
-    is_srl  ? ALU_SRL  :
-    is_sra  ? ALU_SRA  :
-    is_slt  ? ALU_SLT  :
-    is_sltu ? ALU_SLTU :
-              ALU_ADD;
+
+    is_add   ? ALU_ADD :
+    is_addi  ? ALU_ADD :
+
+    is_sub   ? ALU_SUB :
+
+    is_and   ? ALU_AND :
+    is_andi  ? ALU_AND :
+
+    is_or    ? ALU_OR  :
+    is_ori   ? ALU_OR  :
+
+    is_xor   ? ALU_XOR :
+    is_xori  ? ALU_XOR :
+
+    is_sll   ? ALU_SLL :
+    is_slli  ? ALU_SLL :
+
+    is_srl   ? ALU_SRL :
+    is_srli  ? ALU_SRL :
+
+    is_sra   ? ALU_SRA :
+    is_srai  ? ALU_SRA :
+
+    is_slt   ? ALU_SLT :
+    is_slti  ? ALU_SLT :
+
+    is_sltu  ? ALU_SLTU :
+    is_sltiu ? ALU_SLTU :
+
+    is_auipc ? ALU_ADD :
+
+    ALU_ADD;
 //实例化ALU
 ALU u_alu(
     .src1(alu_src1),
