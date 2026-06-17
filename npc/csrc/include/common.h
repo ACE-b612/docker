@@ -7,15 +7,15 @@
 #include <string.h>
 #include <assert.h>
 #include <dlfcn.h>
-
+#define CONFIG_BATCH_MODE
 
 #define MEM_SIZE 0x4000000 
 #define MEM_BASE 0x80000000
 
 // 可以在这里或 Makefile 中定义 Trace 开关
-#define CONFIG_ITRACE
+// #define CONFIG_ITRACE
 #define CONFIG_DIFFTEST
-#define CONFIG_MTRACE
+// #define CONFIG_MTRACE
 // #define CONFIG_FTRACE
 // #define CONFIG_DTRACE
 

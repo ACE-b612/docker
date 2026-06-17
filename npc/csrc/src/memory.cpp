@@ -38,9 +38,21 @@ extern "C" int pmem_read(int raddr){
         pread_display(raddr, 4);
     #endif
     return *(uint32_t*)(pmem + (offset & ~0x3u));
+
+    //=================
+if (raddr >= 0xa0000000) {
+    printf("MMIO READ: 0x%08x\n", raddr);
 }
 
+}
+
+
 extern "C" void pmem_write(int waddr, int wdata, char wmask){
+//===================================================
+    if (waddr >= 0xa0000000) {
+    printf("MMIO WRITE: 0x%08x data=0x%08x\n", waddr, wdata);
+}
+//=========================================================
     if(waddr == SERIAL_PORT){
         putchar((char)wdata);
         return;

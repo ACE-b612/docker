@@ -93,7 +93,16 @@ int main(int argc, char** argv) {
     #endif
     printf(ANSI_FG_GREEN "--- Simulation Start ---" ANSI_NONE "\n");
     reset(10);
+    
+    #ifdef CONFIG_BATCH_MODE
+
+    cpu_exec(-1);
+
+#else
+
     sdb_mainloop();
+
+#endif
 
     
     delete dut;

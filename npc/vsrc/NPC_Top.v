@@ -555,32 +555,28 @@ assign mem_write =
 //============================
 // assign wmask =
 //     mem_write ? 8'h0f : 8'h00;
+//=================================
+wire is_mmio;
 
+assign is_mmio =
+    (alu_result < 32'h80000000) ||
+    (alu_result >= 32'h88000000);
 
-
+assign io_is_mmio = is_mmio;
+//===================================
 //实例化数据存储器
 MemDPIC dmem(
     .clk(clock),
     .en(mem_read || mem_write),
     .addr(alu_result),
     .wmask(wmask),
-    .wdata(wdata_shifted), // 改为对齐后的数据
+    .wdata(wdata_shifted),
     .rdata(mem_rdata)
 );
 //=================================
 
 
-always @(posedge clock) begin
-    if(mem_read || mem_write) begin
-        $display(
-            "MEM: addr=%h wmask=%h wdata=%h rdata=%h",
-            alu_result,
-            wmask,
-            rs2_data,
-            mem_rdata
-        );
-    end
-end
+
 
 //添加 EBREAK
 always @(posedge clock) begin
@@ -703,13 +699,5 @@ ITraceDPIC itrace(
     .next_pc(next_pc)
 );
 //MMIO判断
-assign io_is_mmio =
-    mem_write &&
-    (
-        (alu_result < 32'h80000000)
-        ||
-        (alu_result >= 32'h88000000)
-    );
-
 
 endmodule
